@@ -30,4 +30,4 @@ TIMEZONE=America/Vancouver
 MESSAGE_HEADER=🎲 **Chair roll for the {date} meeting.** Highest d100 wins.
 
 # Managed automatically by the routine — do not edit by hand.
-CHAIRED_THIS_CYCLE=
+CHAIRED_THIS_CYCLE=Libby
