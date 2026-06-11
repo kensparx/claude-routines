@@ -1,0 +1,33 @@
+# Discord Chair Roll — live config (committed back by the routine each run)
+# Secrets (DISCORD_BOT_TOKEN, DISCORD_CHANNEL_ID) are injected as environment
+# variables by the Claude routine environment — never store them here.
+DISCORD_BOT_TOKEN=
+DISCORD_CHANNEL_ID=
+
+# Roster — DisplayName:DiscordUserID:PTOFullName (PTO name optional)
+ROSTER_BEGIN
+Hamish:743623002389741621:
+Ken:743527497890791456:
+Amber:1372276433887694980:
+Brandon:1004872749006737429:
+Sonia:746153195830771833:
+Libby:851901540461838336:
+Liz:743612551174029312:Elisabeth Choi
+Nicole:743612521012789371:
+Michelle:1013926055712673814:
+Alex:743543773459644487:Alexandra Nikitina
+ROSTER_END
+
+# Manual exclusions for the NEXT roll only (comma-separated DisplayNames).
+# Auto-cleared after each roll.
+MANUAL_EXCLUSIONS=
+
+PTO_CALENDAR_ID=3gubr9tcheagjh4df9bla4dq688a1q74@import.calendar.google.com
+DEFAULT_FIRST_MONDAY_CHAIR=Ken
+RUN_DAY=Monday
+RUN_TIME=11:45
+TIMEZONE=America/Vancouver
+MESSAGE_HEADER=🎲 **Chair roll for the {date} meeting.** Highest d100 wins.
+
+# Managed automatically by the routine — do not edit by hand.
+CHAIRED_THIS_CYCLE=
