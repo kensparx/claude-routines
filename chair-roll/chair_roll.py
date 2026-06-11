@@ -101,13 +101,15 @@ def parse_config(path):
             k, _, v = s.partition("=")
             cfg[k.strip()] = v.strip()
 
-    # Layer .env values underneath — .env wins for DISCORD_BOT_TOKEN and
-    # DISCORD_CHANNEL_ID so they can live in the shared secrets file.
+    # Resolve secrets that aren't set directly in the config file.
+    # Precedence for a blank config value: real process env var (cloud routine),
+    # then a local .env file (local Mac run). This lets the same script work both
+    # in a remote Claude routine (secrets injected as env vars) and locally.
     env = _load_env_file(ENV_PATH)
     for key in ("DISCORD_BOT_TOKEN", "DISCORD_CHANNEL_ID"):
-        env_val = env.get(key, "")
-        if env_val and not cfg.get(key):
-            cfg[key] = env_val
+        if cfg.get(key):
+            continue
+        cfg[key] = os.environ.get(key) or env.get(key, "")
 
     return cfg
 
