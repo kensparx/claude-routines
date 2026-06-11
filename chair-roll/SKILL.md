@@ -1,25 +1,34 @@
 You are running the weekly Discord Chair Roll for Sparx Publishing Group as a remote Claude routine.
 
-This routine runs inside a Claude Code environment with the `kensparx/claude-routines` repo checked out as the working directory. State persists by committing the updated config back to the repo at the end of each run.
+This routine runs in a shared environment (also used by the Birthday and Time Off routines). It is NOT bound to a repo, so it clones the `kensparx/claude-routines` repo at runtime, rolls, and pushes the updated state back so the rotation persists between weeks.
 
-## Files (relative to the repo root / working directory)
+## Environment variables (injected by the environment)
 
-- Script: `chair-roll/chair_roll.py`
-- Config + state: `chair-roll/config`  (roster, settings, and the mutable `CHAIRED_THIS_CYCLE`)
+- `DISCORD_BOT_TOKEN`, `DISCORD_CHANNEL_ID` — read automatically by the script.
+- `GITHUB_KENSPARX_TOKEN` — used to clone and push the repo. Never echo any of these.
 
-Secrets `DISCORD_BOT_TOKEN` and `DISCORD_CHANNEL_ID` are injected as environment variables by the environment — the script reads them automatically. Never echo the token.
-
-First, sanity-check the checkout:
+Sanity-check first:
 
 ```bash
-ls chair-roll/chair_roll.py chair-roll/config || { echo "Repo files missing — aborting."; exit 1; }
-echo "token_set=$([ -n "$DISCORD_BOT_TOKEN" ] && echo yes || echo NO)"
-echo "channel_set=$([ -n "$DISCORD_CHANNEL_ID" ] && echo yes || echo NO)"
+echo "discord_token=$([ -n "$DISCORD_BOT_TOKEN" ] && echo yes || echo NO)"
+echo "discord_channel=$([ -n "$DISCORD_CHANNEL_ID" ] && echo yes || echo NO)"
+echo "github_token=$([ -n "$GITHUB_KENSPARX_TOKEN" ] && echo yes || echo NO)"
 ```
 
-If either secret is unset, do NOT attempt to post. Report that the run was blocked because the Discord env vars are missing, and stop.
+If `DISCORD_BOT_TOKEN` or `DISCORD_CHANNEL_ID` is missing, do NOT post — report the block and stop. If `GITHUB_KENSPARX_TOKEN` is missing, you can still roll and post, but state cannot be saved — call this out loudly in the report.
 
-## 1. Compute today and target dates
+## 1. Clone the repo
+
+```bash
+WORK=$(mktemp -d)
+git clone --depth 1 "https://x-access-token:${GITHUB_KENSPARX_TOKEN}@github.com/kensparx/claude-routines.git" "$WORK" 2>&1 | grep -v -i token
+cd "$WORK"
+ls chair-roll/chair_roll.py chair-roll/config || { echo "Repo files missing — aborting."; exit 1; }
+```
+
+All subsequent commands run from `$WORK`. The script is `chair-roll/chair_roll.py`, the config + state is `chair-roll/config`.
+
+## 2. Compute today and target dates
 
 ```bash
 TODAY=$(TZ=America/Vancouver date +%Y-%m-%d)
@@ -30,7 +39,7 @@ This routine fires on Mondays, so `TARGET` is always next Monday — the meeting
 
 PTO calendar ID: `3gubr9tcheagjh4df9bla4dq688a1q74@import.calendar.google.com`
 
-## 2. Is TODAY a stat holiday? → skip the roll entirely
+## 3. Is TODAY a stat holiday? → skip the roll entirely
 
 Call the Google Calendar `list_events` tool with:
 - `calendarId`: the PTO calendar ID
@@ -51,9 +60,9 @@ CHAIR_ROLL_CONFIG=chair-roll/config python3 chair-roll/chair_roll.py \
   --skip-reason "Today is <HolidayName> — stat holiday. No roll. Pick a chair manually for the $TARGET meeting if needed."
 ```
 
-A skip does not change state, so there is nothing to commit. Report the result and stop — do NOT continue to the PTO check or run a roll.
+A skip does not change state, so there is nothing to commit. Report and stop — do NOT continue to the PTO check or run a roll.
 
-## 3. Check PTO for TARGET Monday (advance past stat holidays)
+## 4. Check PTO for TARGET Monday (advance past stat holidays)
 
 If TODAY is not a stat holiday, check the TARGET Monday. Loop up to 4 times:
 
@@ -64,7 +73,7 @@ If TODAY is not a stat holiday, check the TARGET Monday. Loop up to 4 times:
 - If ANY event has no colon → TARGET is a stat holiday day. Advance TARGET by 7 days (`TZ=America/Vancouver date -d "$TARGET +7 days" +%Y-%m-%d`) and re-check.
 - Otherwise: collect the personal PTO names and exit the loop.
 
-## 4. Run the roll
+## 5. Run the roll
 
 ```bash
 CHAIR_ROLL_CONFIG=chair-roll/config python3 chair-roll/chair_roll.py \
@@ -77,7 +86,7 @@ Examples:
 
 The script auto-skips the first Monday of the month (Ken chairs by default) and exits without changing state.
 
-## 5. Commit state back to the repo
+## 6. Commit state back to the repo
 
 A real roll updates `CHAIRED_THIS_CYCLE` and clears `MANUAL_EXCLUSIONS` in `chair-roll/config`. Persist that — otherwise the rotation resets every week:
 
@@ -87,14 +96,14 @@ git config user.name  "Chair Roll Bot"
 if ! git diff --quiet chair-roll/config; then
   git add chair-roll/config
   git commit -m "chair-roll: update cycle state after $TARGET roll"
-  git push
+  git push 2>&1 | grep -v -i token
   echo "State committed."
 else
   echo "No state change to commit (skip week)."
 fi
 ```
 
-## 6. Report
+## 7. Report
 
 Write a brief summary (3–5 lines):
 - TODAY and TARGET dates
@@ -109,5 +118,5 @@ Write a brief summary (3–5 lines):
 
 - The script handles all roll logic: eligible pool, 1d100 rolls, highest-wins, coin-flip tiebreak, Discord post, state update.
 - Do NOT post to Discord directly — always go through the script so state stays consistent.
-- Never echo `DISCORD_BOT_TOKEN` in summaries or logs.
+- Never echo `DISCORD_BOT_TOKEN` or `GITHUB_KENSPARX_TOKEN` in summaries or logs.
 - The Discord bot is shared with other Sparx routines — do not change its token or channel.
