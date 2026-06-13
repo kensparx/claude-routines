@@ -35,6 +35,13 @@ APPLY = "--apply" in sys.argv
 def credentials():
     raw = os.environ.get("GOOGLE_SA_KEY")
     if raw:
+        raw = raw.strip()
+        # Accept either raw JSON or base64-encoded JSON. base64 is a single line
+        # with no quotes/braces/newlines, so it survives .env-format env vars
+        # (where multi-line JSON gets truncated at the first newline).
+        if not raw.startswith("{"):
+            import base64
+            raw = base64.b64decode(raw).decode()
         return service_account.Credentials.from_service_account_info(json.loads(raw), scopes=SCOPES)
     return service_account.Credentials.from_service_account_file(KEY_FILE, scopes=SCOPES)
 
@@ -184,13 +191,13 @@ def main():
                     b = api("GET", f"https://www.googleapis.com/drive/v3/files/{pf}?alt=media&supportsAllDrives=true", raw=True)
                     open(local, "wb").write(b); entry["local"] = local
                 except urllib.error.HTTPError as e: print(f"     download failed: {e.code}")
-        manifest.append(entry)
             # folder webViewLink for write-back
             link = api("GET", f"https://www.googleapis.com/drive/v3/files/{folder}?fields=webViewLink&supportsAllDrives=true").get("webViewLink", "")
             sheet_update(PHOTO_SHEET, f"Sheet1!E{rownum}:F{rownum}", [[ev["name"], link]])
             if backfill and not folder_id_from_link(ev["gd"]):
                 sheet_update(TRACKER, f"Industry Events!M{ev['row']}",
                              [[f"https://drive.google.com/drive/folders/{backfill}"]])
+        manifest.append(entry)
     print(f"\nSUMMARY: {filed} photo(s) {'would be ' if dry else ''}filed, {ambiguous} need human review")
     print("MANIFEST:", json.dumps(manifest))
 
