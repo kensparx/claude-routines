@@ -87,8 +87,11 @@ def folder_id_from_link(link):
     return m.group(1) if m else None
 
 def find_or_make_subfolder(parent, name, dry):
-    hits = drive_list(f"'{parent}' in parents and name='{name}' and mimeType='application/vnd.google-apps.folder' and trashed=false")
-    if hits: return hits[0]["id"]
+    # case-insensitive reuse so existing folders ("edits for LinkedIn" vs "edits for linkedin") aren't duplicated
+    kids = drive_list(f"'{parent}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false")
+    for k in kids:
+        if k["name"].strip().lower() == name.strip().lower():
+            return k["id"]
     if dry: return f"(would-create:{name})"
     f = api("POST", "https://www.googleapis.com/drive/v3/files?supportsAllDrives=true",
             {"name": name, "mimeType": "application/vnd.google-apps.folder", "parents": [parent]})
@@ -165,6 +168,12 @@ def resolve_folder(ev, dry):
 def main():
     dry = not APPLY
     print(f"=== CSE photo routine ({'DRY-RUN' if dry else 'APPLY'}) ===")
+    try:
+        from zoneinfo import ZoneInfo
+        van = datetime.datetime.now(ZoneInfo("America/Vancouver")).strftime("%Y-%m-%d")
+    except Exception:
+        van = datetime.date.today().isoformat()
+    print("VANCOUVER_DATE:", van)
     events = load_events()
     roster = load_roster()
     print(f"loaded {len(events)} dated events from tracker, {len(roster)} roster people")
@@ -185,8 +194,9 @@ def main():
             print(f"  row{rownum} [{pdate}] {comments[:30]!r}: NO MATCH — {how}")
             continue
         folder, src, backfill = resolve_folder(ev, dry)
+        # structure is Event -> event photos -> edits for LinkedIn (edits nested INSIDE event photos)
         ep = find_or_make_subfolder(folder, "event photos", dry) if not str(folder).startswith("(") else "(pending)"
-        ed = find_or_make_subfolder(folder, "edits for linkedin", dry) if not str(folder).startswith("(") else "(pending)"
+        ed = find_or_make_subfolder(ep, "edits for LinkedIn", dry) if not str(ep).startswith("(") else "(pending)"
         print(f"  row{rownum} [{pdate}] -> '{ev['name']}' ({how}; folder {src})")
         pf = file_id_from_gdlink(gdlink)
         local = ""
