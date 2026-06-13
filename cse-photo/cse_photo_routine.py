@@ -165,16 +165,26 @@ def main():
         ep = find_or_make_subfolder(folder, "event photos", dry) if not str(folder).startswith("(") else "(pending)"
         ed = find_or_make_subfolder(folder, "edits for linkedin", dry) if not str(folder).startswith("(") else "(pending)"
         print(f"  row{rownum} [{pdate}] -> '{ev['name']}' ({how}; folder {src})")
-        manifest.append({"row": rownum, "event": ev["name"], "photo_file": file_id_from_gdlink(gdlink),
-                         "event_photos_folder": ep, "edits_folder": ed})
+        pf = file_id_from_gdlink(gdlink)
+        local = ""
+        entry = {"row": rownum, "event": ev["name"], "photo_file": pf,
+                 "event_photos_folder": ep, "edits_folder": ed, "local": ""}
         filed += 1
         if not dry:
             # copy photo into event photos
-            pf = file_id_from_gdlink(gdlink)
             if pf and not str(ep).startswith("("):
                 try: api("POST", f"https://www.googleapis.com/drive/v3/files/{pf}/copy?supportsAllDrives=true",
                          {"parents": [ep]})
                 except urllib.error.HTTPError as e: print(f"     copy failed: {e.code}")
+            # download original locally so the cropping step (vision) can view it
+            if pf:
+                os.makedirs("_filed", exist_ok=True)
+                local = os.path.abspath(f"_filed/{rownum}.jpg")
+                try:
+                    b = api("GET", f"https://www.googleapis.com/drive/v3/files/{pf}?alt=media&supportsAllDrives=true", raw=True)
+                    open(local, "wb").write(b); entry["local"] = local
+                except urllib.error.HTTPError as e: print(f"     download failed: {e.code}")
+        manifest.append(entry)
             # folder webViewLink for write-back
             link = api("GET", f"https://www.googleapis.com/drive/v3/files/{folder}?fields=webViewLink&supportsAllDrives=true").get("webViewLink", "")
             sheet_update(PHOTO_SHEET, f"Sheet1!E{rownum}:F{rownum}", [[ev["name"], link]])
