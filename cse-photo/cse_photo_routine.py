@@ -36,10 +36,7 @@ def credentials():
     raw = os.environ.get("GOOGLE_SA_KEY")
     if raw:
         raw = raw.strip()
-        # Accept either raw JSON or base64-encoded JSON. base64 is a single line
-        # with no quotes/braces/newlines, so it survives .env-format env vars
-        # (where multi-line JSON gets truncated at the first newline).
-        if not raw.startswith("{"):
+        if not raw.startswith("{"):           # accept base64-encoded JSON too
             import base64
             raw = base64.b64decode(raw).decode()
         return service_account.Credentials.from_service_account_info(json.loads(raw), scopes=SCOPES)
@@ -113,18 +110,36 @@ def load_events():
         if not start: continue           # skip section headers / undated rows
         end = parse_event_date(r[2]) or start
         events.append({"name": r[0].strip(), "start": start, "end": end,
-                       "gd": r[12].strip(), "row": i + 2})
+                       "gd": r[12].strip(), "row": i + 2,
+                       "attendees": (r[4] + " " + r[5]).strip()})   # lead + other attendees
     return events
 
-def match(photo_date, comments, events):
+def load_roster():
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "roster.json")
+    try:
+        d = json.load(open(p))
+        return [{"canonical": x["canonical"], "aliases": [a.lower() for a in x.get("aliases", [])]}
+                for x in d.get("people", [])]
+    except Exception:
+        return []
+
+def attendee_hits(ev, photo_text, roster):
+    """Canonical people who BOTH attend ev (tracker attendees) AND are named in the photo text."""
+    att, txt = norm(ev.get("attendees", "")), norm(photo_text)
+    return {p["canonical"] for p in roster
+            if any(a in att for a in p["aliases"]) and any(a in txt for a in p["aliases"])}
+
+def match(photo_date, comments, user, events, roster):
+    photo_text = f"{comments} {user}"
     covering = [e for e in events if e["start"] <= photo_date <= e["end"]]
     if len(covering) == 1: return covering[0], "date"
     if len(covering) > 1:
-        c = norm(comments)
-        named = [e for e in covering if e["name"] and norm(e["name"]).split()[0] in c]
-        if len(named) == 1: return named[0], "date+comment"
+        named = [e for e in covering if attendee_hits(e, photo_text, roster)]   # attendee in the photo
+        if len(named) == 1: return named[0], "attendee-match"
+        c = norm(comments)                                                       # else event name in comment
+        byname = [e for e in covering if e["name"] and norm(e["name"]).split()[0] in c]
+        if len(byname) == 1: return byname[0], "name-in-comment"
         return None, f"ambiguous ({len(covering)} events cover {photo_date})"
-    # no exact cover — nearest within 1 day (events sometimes logged a day off)
     near = [e for e in events if abs((e["start"] - photo_date).days) <= 1 or abs((e["end"] - photo_date).days) <= 1]
     if len(near) == 1: return near[0], "near(±1d)"
     return None, f"no event covers {photo_date}"
@@ -151,7 +166,8 @@ def main():
     dry = not APPLY
     print(f"=== CSE photo routine ({'DRY-RUN' if dry else 'APPLY'}) ===")
     events = load_events()
-    print(f"loaded {len(events)} dated events from tracker")
+    roster = load_roster()
+    print(f"loaded {len(events)} dated events from tracker, {len(roster)} roster people")
     rows = sheet_get(PHOTO_SHEET, "Sheet1!A2:F")
     manifest, filed, ambiguous = [], 0, 0
     for i, r in enumerate(rows):
@@ -163,7 +179,7 @@ def main():
         pdate = parse_photo_date(date_s)
         if not pdate:
             print(f"  row{rownum}: unparseable date '{date_s}' — skip"); continue
-        ev, how = match(pdate, comments, events)
+        ev, how = match(pdate, comments, user, events, roster)
         if not ev:
             ambiguous += 1
             print(f"  row{rownum} [{pdate}] {comments[:30]!r}: NO MATCH — {how}")
@@ -191,7 +207,7 @@ def main():
                     b = api("GET", f"https://www.googleapis.com/drive/v3/files/{pf}?alt=media&supportsAllDrives=true", raw=True)
                     open(local, "wb").write(b); entry["local"] = local
                 except urllib.error.HTTPError as e: print(f"     download failed: {e.code}")
-            # folder webViewLink for write-back
+            # folder webViewLink + write-back to photo sheet (E/F) + backfill tracker M
             link = api("GET", f"https://www.googleapis.com/drive/v3/files/{folder}?fields=webViewLink&supportsAllDrives=true").get("webViewLink", "")
             sheet_update(PHOTO_SHEET, f"Sheet1!E{rownum}:F{rownum}", [[ev["name"], link]])
             if backfill and not folder_id_from_link(ev["gd"]):

@@ -1,0 +1,17 @@
+{
+  "_doc": "CSE people roster for photo→event disambiguation. When a date is covered by >1 event, the engine matches names in the photo's Comments/User against each event's attendees (tracker Industry Events cols E 'Team Member Leading' + F 'Other Attendees'), normalized via these aliases. Fill the TODOs. aliases are lowercased; include first name, full name, and Discord handle.",
+  "people": [
+    {"canonical": "Phil Shum", "aliases": ["phil", "phil shum", "phil.shum", "pshum"], "role": "Listings Development", "note": "COMMON POSTER. Bare 'Phil' defaults to Phil Shum unless 'Phil C'/'Cox' is specified."},
+    {"canonical": "Phil Cox", "aliases": ["phil c", "phil cox", "phil.cox"], "role": "TODO", "note": "Only when 'Phil C' / 'Cox' is explicit."},
+    {"canonical": "Melissa Robertson", "aliases": ["melissa", "melissa robertson", "melissa.robertson"], "role": "TODO", "note": "COMMON POSTER (Discord user melissa.robertson)."},
+    {"canonical": "Anna", "aliases": ["anna"], "role": "TODO (full name?)", "note": ""},
+    {"canonical": "Sheena", "aliases": ["sheena"], "role": "TODO (full name?)", "note": ""},
+    {"canonical": "Scott", "aliases": ["scott"], "role": "TODO (full name?)", "note": ""},
+    {"canonical": "James Black", "aliases": ["james", "james black", "james.black"], "role": "VP Listings Development; approval gatekeeper", "note": ""},
+    {"canonical": "Dimitri", "aliases": ["dimitri"], "role": "TODO (full name?)", "note": ""},
+    {"canonical": "Renee", "aliases": ["renee"], "role": "TODO (full name?)", "note": "dislikes backs-of-bald-heads in photos"}
+  ],
+  "external_organizers": [
+    {"name": "Raj", "aliases": ["raj"], "event_hint": "TODO — which event(s) does Raj organize? (would let us match the June 3 'With Raj' photo)"}
+  ]
+}
